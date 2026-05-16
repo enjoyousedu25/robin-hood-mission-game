@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kipper's Rescue Mission</title>
+<style>
+:root {
+  --green:#2d6a2d;--green-light:#4a9a4a;--green-dark:#1a3d1a;
+  --brown:#6b3d1e;--brown-light:#9c5c2a;
+  --gold:#d4a017;--gold-light:#f0c040;
+  --parchment:#f5e6c8;--parchment-dark:#e8d4a0;
+  --red:#8b2020;--cream:#fdf6e3;
+  --shadow:rgba(0,0,0,0.35);--text-dark:#2c1810;--text-light:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Georgia',serif;background:#0d2e0d;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden;}
+#game-wrapper{width:100%;max-width:900px;min-height:100vh;display:flex;flex-direction:column;position:relative;}
+
+/* HUD */
+#hud{display:none;justify-content:space-between;align-items:center;padding:8px 16px;background:linear-gradient(135deg,var(--brown),var(--brown-light));border-bottom:3px solid var(--gold);position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:6px;}
+#hud.visible{display:flex;}
+.hud-score{font-size:1.05rem;color:var(--gold-light);font-weight:bold;}
+.hud-mission{font-size:.9rem;color:var(--parchment);font-style:italic;}
+.hud-btns{display:flex;gap:6px;}
+.hud-btn{padding:4px 10px;border-radius:20px;border:2px solid var(--gold);background:var(--green-dark);color:var(--gold-light);font-size:.78rem;cursor:pointer;transition:all .2s;font-family:inherit;}
+.hud-btn:hover{background:var(--gold);color:var(--text-dark);}
+#progress-wrap{height:8px;background:var(--green-dark);width:100%;display:none;}
+#progress-wrap.visible{display:block;}
+#progress-bar{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-light));width:0%;transition:width .8s ease;box-shadow:0 0 8px var(--gold-light);}
+
+/* SCREENS */
+.screen{display:none;flex-direction:column;align-items:center;flex:1;padding:0 0 52px;position:relative;animation:fadeIn .5s ease;}
+.screen.active{display:flex;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+footer{position:fixed;bottom:0;width:100%;max-width:900px;text-align:center;padding:4px;background:rgba(26,61,26,.97);color:var(--parchment-dark);font-size:.7rem;letter-spacing:1px;border-top:1px solid var(--gold);z-index:200;}
+
+/* ══ EXPLORE SCENE ══ */
+.explore-scene{width:100%;position:relative;cursor:crosshair;user-select:none;}
+.explore-scene svg{display:block;width:100%;}
+
+/* Hotspot */
+.hotspot{position:absolute;border-radius:50%;border:3px dashed var(--gold-light);background:rgba(240,192,64,.18);cursor:pointer;animation:pulse 1.5s ease-in-out infinite;transition:all .3s;display:flex;align-items:center;justify-content:center;}
+.hotspot:hover{background:rgba(240,192,64,.4);transform:scale(1.12);}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(240,192,64,.6)}50%{box-shadow:0 0 0 10px rgba(240,192,64,0)}}
+.hotspot-label{position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);background:var(--brown);color:var(--gold-light);font-size:.72rem;padding:2px 8px;border-radius:10px;white-space:nowrap;font-style:italic;pointer-events:none;}
+
+/* Hint arrow */
+.hint-arrow{position:absolute;font-size:1.6rem;animation:bounce .7s ease-in-out infinite alternate;pointer-events:none;filter:drop-shadow(0 0 6px var(--gold));}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+
+/* Explore instruction banner */
+.explore-banner{width:100%;background:linear-gradient(135deg,rgba(26,61,26,.97),rgba(13,46,13,.97));border-bottom:2px solid var(--gold);padding:10px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.explore-banner .mission-badge{background:var(--gold);color:var(--text-dark);border-radius:20px;padding:3px 12px;font-size:.8rem;font-weight:bold;white-space:nowrap;}
+.explore-banner .explore-tip{color:var(--parchment);font-size:.92rem;font-style:italic;}
+
+/* ══ QUESTION CARD ══ */
+.q-card-wrap{width:100%;padding:12px 14px 0;display:flex;justify-content:center;}
+.q-card{background:var(--parchment);border-radius:18px;padding:20px 22px;max-width:700px;width:100%;box-shadow:0 6px 30px var(--shadow);border:2px solid var(--brown-light);}
+.q-card-title{font-size:1.15rem;color:var(--brown);border-bottom:2px solid var(--gold);padding-bottom:7px;margin-bottom:13px;font-weight:bold;}
+.question-text{font-size:1rem;color:var(--text-dark);margin-bottom:13px;line-height:1.65;}
+.options-grid{display:flex;flex-direction:column;gap:9px;}
+
+/* Inline feedback strip — replaces blocking popup */
+.feedback-strip{border-radius:12px;padding:10px 16px;margin-top:12px;display:none;align-items:flex-start;gap:10px;animation:fadeIn .3s ease;}
+.feedback-strip.show{display:flex;}
+.feedback-strip.ok{background:#d4edda;border:2px solid #2d8a2d;}
+.feedback-strip.err{background:#fde8e8;border:2px solid #c0392b;}
+.feedback-strip-icon{font-size:1.4rem;flex-shrink:0;margin-top:2px;}
+.feedback-strip-text{flex:1;font-size:.93rem;color:var(--text-dark);line-height:1.5;}
+.feedback-strip .cont-btn{margin-top:8px;padding:7px 18px;font-size:.88rem;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--text-dark);border:none;border-radius:20px;cursor:pointer;font-family:inherit;font-weight:bold;transition:all .2s;}
+.feedback-strip .cont-btn:hover{transform:scale(1.05);}
+
+/* BUTTONS */
+.btn-primary{padding:13px 34px;font-size:1.1rem;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--text-dark);border:none;border-radius:50px;cursor:pointer;font-family:inherit;font-weight:bold;letter-spacing:1px;box-shadow:0 4px 20px rgba(212,160,23,.5);transition:all .2s;position:relative;z-index:10;}
+.btn-primary:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 8px 28px rgba(212,160,23,.7);}
+.btn-option{padding:11px 18px;font-size:.97rem;background:linear-gradient(135deg,var(--parchment),var(--parchment-dark));color:var(--text-dark);border:2px solid var(--brown-light);border-radius:12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;transition:all .2s;box-shadow:0 2px 8px var(--shadow);}
+.btn-option:hover:not(:disabled){transform:translateX(5px);border-color:var(--gold);background:linear-gradient(135deg,#fff9e6,var(--parchment-dark));}
+.btn-option.correct{background:linear-gradient(135deg,#c8f7c5,#a8e6a3)!important;border-color:#2d8a2d!important;}
+.btn-option.wrong{background:linear-gradient(135deg,#f7c5c5,#e6a3a3)!important;border-color:#8a2d2d!important;}
+
+/* ══ START SCREEN ══ */
+#screen-start{background:radial-gradient(ellipse at 50% 30%,#1a5c1a 0%,#0d2e0d 60%,#050f05 100%);justify-content:center;gap:18px;padding:40px 16px 70px;}
+.forest-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+.tree{position:absolute;bottom:0;}
+.tree-trunk{background:var(--brown);margin:0 auto;border-radius:4px 4px 0 0;}
+.tree-top{background:var(--green);clip-path:polygon(50% 0%,0% 100%,100% 100%);margin:0 auto;}
+.moon{position:absolute;top:28px;right:70px;width:58px;height:58px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fffde7,#f9d71c);box-shadow:0 0 30px 15px rgba(249,215,28,.22);}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 2s infinite alternate;}
+@keyframes twinkle{from{opacity:.3}to{opacity:1}}
+.key-svg{filter:drop-shadow(0 0 20px var(--gold-light));animation:keyPulse 2s ease-in-out infinite;}
+@keyframes keyPulse{0%,100%{filter:drop-shadow(0 0 15px var(--gold-light));transform:scale(1)}50%{filter:drop-shadow(0 0 35px #fff9c4);transform:scale(1.07)}}
+.particle{position:absolute;width:6px;height:6px;border-radius:50%;pointer-events:none;animation:floatParticle linear infinite;opacity:0;}
+@keyframes floatParticle{0%{opacity:0;transform:translate(0,0) scale(.5)}20%{opacity:1}80%{opacity:.8}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.5)}}
+.start-title{font-size:clamp(1.8rem,5vw,2.8rem);color:var(--gold-light);text-align:center;text-shadow:2px 2px 8px rgba(0,0,0,.8),0 0 20px var(--gold);font-weight:bold;letter-spacing:2px;line-height:1.2;z-index:10;}
+.start-subtitle{font-size:clamp(.95rem,2.5vw,1.2rem);color:var(--parchment);text-align:center;font-style:italic;z-index:10;letter-spacing:1px;}
+.story-intro{background:rgba(0,0,0,.55);border:2px solid var(--gold);border-radius:16px;padding:15px 22px;max-width:540px;color:var(--parchment);font-size:.98rem;line-height:1.7;text-align:center;z-index:10;backdrop-filter:blur(4px);}
+
+/* ══ SEQUENCING ══ */
+.seq-cards{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
+.seq-card{background:linear-gradient(135deg,var(--parchment),var(--parchment-dark));border:2px solid var(--brown-light);border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:10px;cursor:grab;font-size:.93rem;color:var(--text-dark);user-select:none;transition:all .2s;}
+.seq-card:hover{border-color:var(--gold);transform:scale(1.02);}
+.seq-card.dragging{opacity:.4;}
+.seq-card.drag-over{border-color:var(--gold-light);background:#fff9e6;}
+.seq-num{background:var(--brown);color:var(--gold-light);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:bold;flex-shrink:0;}
+
+/* ══ LOCKS ══ */
+.locks-row{display:flex;justify-content:center;gap:24px;margin:10px 0;flex-wrap:wrap;}
+.lock-item{text-align:center;}
+.lock-icon{font-size:2.2rem;transition:all .5s;filter:grayscale(1) opacity(.55);}
+.lock-icon.unlocked{filter:none;animation:unlockPop .5s ease;}
+@keyframes unlockPop{0%{transform:scale(1)}50%{transform:scale(1.4) rotate(-15deg)}100%{transform:scale(1)}}
+
+/* ══ FINAL ══ */
+#screen-final{background:radial-gradient(ellipse at 50% 30%,#1a5c1a 0%,#0d2e0d 70%,#050f05 100%);justify-content:center;text-align:center;gap:14px;padding:30px 16px 70px;}
+.badge-svg{animation:badgeSpin 1s ease-out;filter:drop-shadow(0 0 20px var(--gold));z-index:10;}
+@keyframes badgeSpin{from{transform:rotate(-15deg) scale(.5);opacity:0}to{transform:rotate(0) scale(1);opacity:1}}
+.final-title{font-size:clamp(1.6rem,4vw,2.4rem);color:var(--gold-light);text-shadow:0 0 20px var(--gold);font-weight:bold;z-index:10;}
+.final-score-box{background:rgba(0,0,0,.5);border:2px solid var(--gold);border-radius:16px;padding:14px 30px;color:var(--parchment);font-size:1.15rem;backdrop-filter:blur(4px);z-index:10;}
+.reflection-box{background:rgba(0,0,0,.4);border:2px solid var(--gold);border-radius:16px;padding:16px;max-width:500px;width:100%;z-index:10;}
+.reflection-box label{display:block;color:var(--parchment);margin-bottom:8px;font-size:.97rem;}
+.reflection-box textarea{width:100%;padding:10px;border-radius:10px;border:2px solid var(--brown-light);font-family:inherit;font-size:.93rem;resize:vertical;background:var(--parchment);color:var(--text-dark);min-height:78px;}
+
+/* Points pop */
+.points-pop{position:fixed;font-size:1.25rem;font-weight:bold;color:var(--gold-light);text-shadow:0 0 10px var(--gold);pointer-events:none;animation:pointsPop 1.2s ease forwards;z-index:400;}
+@keyframes pointsPop{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-55px)}}
+
+/* Confetti */
+.confetti-piece{position:fixed;width:10px;height:14px;top:-20px;border-radius:2px;animation:confettiFall linear forwards;pointer-events:none;z-index:500;}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+
+/* Char bubble */
+#char-bubble{position:fixed;top:58px;right:10px;background:var(--parchment);border:2px solid var(--gold);border-radius:16px 16px 16px 4px;padding:7px 13px;font-size:.82rem;color:var(--text-dark);max-width:190px;box-shadow:0 4px 16px var(--shadow);z-index:150;opacity:0;transition:opacity .4s;font-style:italic;pointer-events:none;}
+#char-bubble.show{opacity:1;}
+
+@media(max-width:600px){.q-card{padding:14px;}.btn-option{font-size:.87rem;}}
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-score">⚔️ <span id="score-display">0</span> Bravery Points</div>
+  <div class="hud-mission" id="mission-display">Mission 1 of 6</div>
+  <div class="hud-btns">
+    <button class="hud-btn" id="sound-btn" onclick="toggleSound()">🔊 Sound</button>
+    <button class="hud-btn" onclick="skipLevel()">⏭ Skip</button>
+    <button class="hud-btn" onclick="resetGame()">↺ Reset</button>
+  </div>
+</div>
+<div id="progress-wrap"><div id="progress-bar"></div></div>
+
+<!-- ══ START ══ -->
+<div class="screen active" id="screen-start">
+  <div class="forest-bg" id="forest-bg"></div>
+  <div class="moon"></div>
+  <div style="position:relative;z-index:10;margin-top:30px">
+    <svg class="key-svg" width="88" height="88" viewBox="0 0 90 90">
+      <defs><radialGradient id="kg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff9c4"/><stop offset="100%" stop-color="#d4a017"/></radialGradient></defs>
+      <circle cx="30" cy="30" r="26" fill="url(#kg)" stroke="#a07010" stroke-width="3"/>
+      <circle cx="30" cy="30" r="14" fill="none" stroke="#a07010" stroke-width="3"/>
+      <rect x="50" y="27" width="36" height="10" rx="5" fill="url(#kg)" stroke="#a07010" stroke-width="2"/>
+      <rect x="72" y="37" width="6" height="12" rx="2" fill="url(#kg)" stroke="#a07010" stroke-width="2"/>
+      <rect x="62" y="37" width="6" height="10" rx="2" fill="url(#kg)" stroke="#a07010" stroke-width="2"/>
+    </svg>
+    <div id="particles-container" style="position:absolute;inset:0;pointer-events:none"></div>
+  </div>
+  <h1 class="start-title">Kipper's Rescue Mission</h1>
+  <p class="start-subtitle">A Robin Hood Reading Adventure</p>
+  <div class="story-intro">🏹 Robin Hood and the children have been captured by the Sheriff!<br><strong>Can you help Kipper rescue them?</strong><br><br>Explore each scene — find the glowing clues, then answer questions to earn <em>Bravery Points</em>.</div>
+  <button class="btn-primary" onclick="startGame()">⚔️ Start Mission</button>
+</div>
+
+<!-- ══ LEVEL 1 ══ -->
+<div class="screen" id="screen-l1">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 1 of 6</span>
+    <span class="explore-tip">🔑 The magic key is glowing! <strong>Click the golden key</strong> to begin your adventure.</span>
+  </div>
+  <!-- EXPLORE SCENE -->
+  <div class="explore-scene" id="explore-l1">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <!-- Night sky -->
+      <defs>
+        <radialGradient id="sky1" cx="50%" cy="0%" r="100%"><stop offset="0%" stop-color="#1a0a2e"/><stop offset="100%" stop-color="#050510"/></radialGradient>
+        <radialGradient id="keyGlow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff9c4"/><stop offset="100%" stop-color="#d4a017"/></radialGradient>
+      </defs>
+      <rect width="900" height="320" fill="url(#sky1)"/>
+      <!-- Stars -->
+      <circle cx="80" cy="30" r="1.5" fill="white" opacity=".9"/><circle cx="200" cy="18" r="1" fill="white" opacity=".7"/>
+      <circle cx="340" cy="25" r="2" fill="white" opacity=".8"/><circle cx="500" cy="12" r="1.5" fill="white"/>
+      <circle cx="660" cy="35" r="1" fill="white" opacity=".6"/><circle cx="780" cy="20" r="2" fill="white" opacity=".9"/>
+      <circle cx="130" cy="60" r="1" fill="white" opacity=".5"/><circle cx="820" cy="55" r="1.5" fill="white" opacity=".7"/>
+      <!-- Moon -->
+      <circle cx="820" cy="60" r="35" fill="#fffde7" opacity=".15"/>
+      <circle cx="810" cy="55" r="28" fill="#f9d71c" opacity=".9"/>
+      <!-- Curtain/theatre feel - pantomime stage -->
+      <rect x="0" y="0" width="60" height="320" fill="#5c0a0a" opacity=".8"/>
+      <rect x="840" y="0" width="60" height="320" fill="#5c0a0a" opacity=".8"/>
+      <!-- Stage floor -->
+      <rect x="60" y="240" width="780" height="80" fill="#3d2005" opacity=".85"/>
+      <rect x="60" y="238" width="780" height="8" fill="#6b3d1e"/>
+      <!-- Stage planks -->
+      <line x1="60" y1="260" x2="840" y2="260" stroke="#4a2e0a" stroke-width="1" opacity=".5"/>
+      <line x1="60" y1="280" x2="840" y2="280" stroke="#4a2e0a" stroke-width="1" opacity=".4"/>
+      <!-- Robin Hood poster on wall -->
+      <rect x="120" y="50" width="120" height="160" rx="6" fill="#2d1806" stroke="#6b3d1e" stroke-width="2"/>
+      <text x="180" y="95" text-anchor="middle" font-size="28">🏹</text>
+      <text x="180" y="120" text-anchor="middle" fill="#d4a017" font-size="11" font-weight="bold">ROBIN</text>
+      <text x="180" y="134" text-anchor="middle" fill="#d4a017" font-size="11" font-weight="bold">HOOD</text>
+      <text x="180" y="155" text-anchor="middle" fill="#a07010" font-size="9">THE PANTOMIME</text>
+      <!-- Audience seats suggestion -->
+      <ellipse cx="300" cy="300" rx="30" ry="12" fill="#4a2e0a" opacity=".6"/>
+      <ellipse cx="380" cy="305" rx="30" ry="12" fill="#4a2e0a" opacity=".6"/>
+      <text x="295" y="290" font-size="18" text-anchor="middle">👧</text>
+      <text x="375" y="288" font-size="18" text-anchor="middle">👧</text>
+      <text x="455" y="290" font-size="18" text-anchor="middle">👦</text>
+      <!-- Labels -->
+      <text x="295" y="315" text-anchor="middle" fill="#9c5c2a" font-size="9">Biff</text>
+      <text x="375" y="315" text-anchor="middle" fill="#9c5c2a" font-size="9">Wilma</text>
+      <text x="455" y="315" text-anchor="middle" fill="#9c5c2a" font-size="9">Anneena</text>
+      <!-- THE GLOWING KEY (hotspot target) -->
+      <g id="key-hotspot-svg" style="cursor:pointer">
+        <circle cx="640" cy="150" r="50" fill="rgba(240,192,64,.12)">
+          <animate attributeName="r" values="45;55;45" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values=".1;.3;.1" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="620" cy="140" r="22" fill="url(#keyGlow)" stroke="#a07010" stroke-width="2.5"/>
+        <circle cx="620" cy="140" r="11" fill="none" stroke="#a07010" stroke-width="2"/>
+        <rect x="637" y="137" width="40" height="9" rx="4" fill="url(#keyGlow)" stroke="#a07010" stroke-width="1.5"/>
+        <rect x="660" y="146" width="7" height="11" rx="2" fill="url(#keyGlow)" stroke="#a07010" stroke-width="1.5"/>
+        <rect x="650" y="146" width="7" height="9" rx="2" fill="url(#keyGlow)" stroke="#a07010" stroke-width="1.5"/>
+        <!-- sparkles around key -->
+        <text x="590" y="115" font-size="14" opacity=".9">✨</text>
+        <text x="668" y="112" font-size="11" opacity=".7">✦</text>
+        <text x="588" y="170" font-size="10" opacity=".7">⋆</text>
+        <text x="672" y="175" font-size="13" opacity=".8">✨</text>
+      </g>
+      <!-- Hint arrow pointing to key -->
+      <text x="640" y="95" text-anchor="middle" font-size="22" fill="#f0c040" opacity=".9">👆</text>
+      <text x="640" y="88" text-anchor="middle" font-size="10" fill="#f0c040" font-style="italic">Click me!</text>
+    </svg>
+  </div>
+  <!-- Questions appear here -->
+  <div id="l1-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="q-card-title" id="l1-q-title">🔑 Question 1 of 3</div>
+      <div id="l1-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 2 ══ -->
+<div class="screen" id="screen-l2">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 2 of 6</span>
+    <span class="explore-tip">🌲 You are in Robin Hood's wood. <strong>Click the path ahead</strong> to decide what Kipper should do.</span>
+  </div>
+  <div class="explore-scene" id="explore-l2">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a2e0a"/><stop offset="100%" stop-color="#1a5c1a"/></linearGradient></defs>
+      <rect width="900" height="320" fill="url(#sky2)"/>
+      <!-- Ground -->
+      <ellipse cx="450" cy="340" rx="500" ry="80" fill="#1a3d0a"/>
+      <!-- Forest path -->
+      <path d="M350,320 Q430,200 470,100 Q510,200 560,320 Z" fill="#3d2005" opacity=".7"/>
+      <path d="M370,320 Q440,210 470,120 Q500,210 540,320 Z" fill="#4a2e0a" opacity=".6"/>
+      <!-- Many trees -->
+      <rect x="40" y="150" width="22" height="170" fill="#3d1f05"/><polygon points="51,30 5,160 97,160" fill="#1a5c1a"/><polygon points="51,70 10,170 92,170" fill="#2d8a2d"/>
+      <rect x="120" y="170" width="18" height="150" fill="#3d1f05"/><polygon points="129,60 88,180 170,180" fill="#1a5c1a"/>
+      <rect x="195" y="160" width="20" height="160" fill="#3d1f05"/><polygon points="205,50 160,170 250,170" fill="#1a5c1a"/><polygon points="205,90 165,180 245,180" fill="#2d8a2d"/>
+      <rect x="660" y="155" width="22" height="165" fill="#3d1f05"/><polygon points="671,35 626,165 716,165" fill="#1a5c1a"/>
+      <rect x="730" y="165" width="20" height="155" fill="#3d1f05"/><polygon points="740,55 698,175 782,175" fill="#1a5c1a"/><polygon points="740,90 702,182 778,182" fill="#2d8a2d"/>
+      <rect x="810" y="150" width="18" height="170" fill="#3d1f05"/><polygon points="819,40 778,160 860,160" fill="#1a5c1a"/>
+      <!-- Bushes -->
+      <ellipse cx="140" cy="310" rx="55" ry="22" fill="#1a4a1a"/>
+      <ellipse cx="750" cy="308" rx="55" ry="22" fill="#1a4a1a"/>
+      <!-- Arrows in trees -->
+      <line x1="170" y1="110" x2="220" y2="95" stroke="#6b3d1e" stroke-width="3"/><polygon points="220,95 210,87 228,91" fill="#6b3d1e"/>
+      <line x1="680" y1="100" x2="730" y2="115" stroke="#6b3d1e" stroke-width="3"/><polygon points="730,115 722,106 738,110" fill="#6b3d1e"/>
+      <!-- Robin Hood figure -->
+      <text x="480" y="218" text-anchor="middle" font-size="36">🏹</text>
+      <text x="480" y="260" text-anchor="middle" fill="#a8e6a3" font-size="10" font-style="italic">Robin Hood — not yet seen</text>
+      <!-- Kipper -->
+      <text x="320" y="290" font-size="28">🧒</text>
+      <!-- Clickable PATH hotspot -->
+      <g id="path-hotspot-svg" style="cursor:pointer">
+        <ellipse cx="430" cy="290" rx="60" ry="22" fill="rgba(240,192,64,.2)" stroke="rgba(240,192,64,.6)" stroke-width="2" stroke-dasharray="6,4">
+          <animate attributeName="opacity" values=".4;1;.4" dur="1.5s" repeatCount="indefinite"/>
+        </ellipse>
+        <text x="430" y="278" text-anchor="middle" font-size="11" fill="#f0c040">👆 Path ahead</text>
+      </g>
+      <!-- Hidden figures in bushes hint -->
+      <text x="100" y="298" font-size="14" opacity=".5">👥</text>
+      <text x="95" y="312" text-anchor="middle" fill="#888" font-size="9" font-style="italic">shadows...</text>
+    </svg>
+  </div>
+  <div id="l2-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="q-card-title">🌲 What should Kipper do?</div>
+      <p class="question-text">You arrive in the wood. Robin Hood has not seen you yet. What should Kipper do?</p>
+      <div class="options-grid" id="l2-options"></div>
+      <div class="feedback-strip" id="l2-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 3 ══ -->
+<div class="screen" id="screen-l3">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 3 of 6</span>
+    <span class="explore-tip">⚠️ Someone is coming through the trees! <strong>Click the shadow in the trees</strong> to find out who it is.</span>
+  </div>
+  <div class="explore-scene" id="explore-l3">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a0000"/><stop offset="100%" stop-color="#3d0a00"/></linearGradient></defs>
+      <rect width="900" height="320" fill="url(#sky3)"/>
+      <!-- Ground -->
+      <rect x="0" y="260" width="900" height="60" fill="#1a0f00"/>
+      <!-- Ominous trees -->
+      <polygon points="80,280 40,100 120,100" fill="#0a0000"/><polygon points="80,280 45,130 115,130" fill="#150505"/>
+      <polygon points="200,280 158,80 242,80" fill="#0a0000"/><polygon points="200,280 162,110 238,110" fill="#150505"/>
+      <polygon points="320,280 278,70 362,70" fill="#0a0000"/>
+      <polygon points="700,280 660,70 740,70" fill="#0a0000"/>
+      <polygon points="820,280 778,90 862,90" fill="#0a0000"/><polygon points="820,280 782,120 858,120" fill="#150505"/>
+      <!-- Robin Hood & merry men unaware -->
+      <text x="380" y="238" font-size="28">🏹</text>
+      <text x="440" y="245" font-size="22">🎵</text>
+      <text x="380" y="268" text-anchor="middle" fill="#9c5c2a" font-size="9" font-style="italic">enjoying the song...</text>
+      <!-- Red glow from right -->
+      <ellipse cx="820" cy="200" rx="120" ry="80" fill="rgba(139,32,32,.25)"/>
+      <!-- Sheriff silhouette — clickable -->
+      <g id="sheriff-hotspot-svg" style="cursor:pointer">
+        <!-- Pulsing danger ring -->
+        <circle cx="780" cy="170" r="65" fill="rgba(139,32,32,.12)" stroke="rgba(200,50,50,.4)" stroke-width="2" stroke-dasharray="8,4">
+          <animate attributeName="r" values="60;75;60" dur="1.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values=".5;1;.5" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+        <!-- Sheriff body (silhouette) -->
+        <circle cx="778" cy="130" r="22" fill="#1a0000"/>
+        <!-- Sheriff hat -->
+        <rect x="757" y="108" width="42" height="12" rx="3" fill="#100000"/>
+        <rect x="764" y="86" width="28" height="26" rx="4" fill="#100000"/>
+        <!-- Sheriff body -->
+        <rect x="758" y="152" width="40" height="60" rx="6" fill="#150000"/>
+        <!-- Sheriff cloak -->
+        <path d="M755,155 Q745,200 750,225 L808,225 Q813,200 803,155 Z" fill="#1a0000"/>
+        <!-- Eyes glow red -->
+        <circle cx="770" cy="129" r="3" fill="#cc0000" opacity=".8"><animate attributeName="opacity" values=".5;1;.5" dur=".8s" repeatCount="indefinite"/></circle>
+        <circle cx="786" cy="129" r="3" fill="#cc0000" opacity=".8"><animate attributeName="opacity" values=".5;1;.5" dur=".8s" repeatCount="indefinite"/></circle>
+        <text x="778" y="108" text-anchor="middle" fill="#f0c040" font-size="10" opacity=".8">👆 Who is this?</text>
+      </g>
+      <!-- Danger banner -->
+      <rect x="280" y="20" width="250" height="38" rx="8" fill="#8b2020" opacity=".92"/>
+      <text x="405" y="44" text-anchor="middle" fill="#ffd700" font-size="17" font-weight="bold">⚠ DANGER! ⚠</text>
+    </svg>
+  </div>
+  <div id="l3-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="q-card-title">⚠️ Who is coming?</div>
+      <p class="question-text">Robin Hood is enjoying the song. Nobody notices someone coming through the trees. Who is it?</p>
+      <div class="options-grid" id="l3-options"></div>
+      <div class="feedback-strip" id="l3-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 4 ══ -->
+<div class="screen" id="screen-l4">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 4 of 6</span>
+    <span class="explore-tip">🪣 Kipper is hiding! <strong>Click on Kipper's thought bubble</strong> to help him decide what to do.</span>
+  </div>
+  <div class="explore-scene" id="explore-l4">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a1a0a"/><stop offset="100%" stop-color="#1a3d1a"/></linearGradient></defs>
+      <rect width="900" height="320" fill="url(#sky4)"/>
+      <rect x="0" y="258" width="900" height="62" fill="#0f1f0f"/>
+      <!-- Big black pot -->
+      <ellipse cx="310" cy="278" rx="80" ry="18" fill="#111" opacity=".7"/>
+      <path d="M235,210 Q232,278 310,280 Q388,278 385,210 Z" fill="#1c1c1c" stroke="#333" stroke-width="2.5"/>
+      <ellipse cx="310" cy="210" rx="75" ry="14" fill="#252525" stroke="#333" stroke-width="2"/>
+      <!-- Pot handle -->
+      <path d="M255,210 Q240,185 270,185 Q300,185 310,195" fill="none" stroke="#333" stroke-width="5"/>
+      <!-- Pot legs -->
+      <rect x="265" y="272" width="12" height="28" rx="3" fill="#111"/>
+      <rect x="343" y="272" width="12" height="28" rx="3" fill="#111"/>
+      <!-- Steam -->
+      <text x="302" y="195" font-size="14" opacity=".6">💨</text>
+      <!-- Kipper peeking -->
+      <text x="222" y="224" font-size="30">🧒</text>
+      <!-- Thought bubble — clickable -->
+      <g id="thought-hotspot-svg" style="cursor:pointer">
+        <circle cx="202" cy="195" r="6" fill="var(--parchment)" opacity=".88"/>
+        <circle cx="190" cy="180" r="9" fill="var(--parchment)" opacity=".9"/>
+        <ellipse cx="170" cy="155" rx="45" ry="28" fill="var(--parchment)" opacity=".95" stroke="var(--gold)" stroke-width="1.5">
+          <animate attributeName="opacity" values=".85;1;.85" dur="1.5s" repeatCount="indefinite"/>
+        </ellipse>
+        <text x="170" y="148" text-anchor="middle" font-size="11" fill="#333">How can</text>
+        <text x="170" y="163" text-anchor="middle" font-size="11" fill="#333">I help? 💭</text>
+        <text x="170" y="122" text-anchor="middle" fill="#f0c040" font-size="10">👆 Click!</text>
+      </g>
+      <!-- Sheriff's men in distance -->
+      <text x="620" y="255" font-size="28" opacity=".7">⚔️</text>
+      <text x="680" y="250" font-size="28" opacity=".7">⚔️</text>
+      <text x="650" y="275" text-anchor="middle" fill="#888" font-size="9" font-style="italic">Sheriff's men...</text>
+      <!-- Bushes -->
+      <ellipse cx="540" cy="280" rx="70" ry="24" fill="#1a4a1a"/>
+      <ellipse cx="600" cy="275" rx="55" ry="22" fill="#2d6a2d"/>
+      <ellipse cx="800" cy="275" rx="65" ry="26" fill="#1a4a1a"/>
+    </svg>
+  </div>
+  <div id="l4-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="q-card-title">🪣 Hide or Help?</div>
+      <p class="question-text">Kipper is alone. The Sheriff's men did not see him. What should he do?</p>
+      <div class="options-grid" id="l4-options"></div>
+      <div class="feedback-strip" id="l4-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 5 ══ -->
+<div class="screen" id="screen-l5">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 5 of 6</span>
+    <span class="explore-tip">🗝️ Kipper has a clever plan! <strong>Click the guard</strong> to start the trick — then put the steps in order.</span>
+  </div>
+  <div class="explore-scene" id="explore-l5">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1000"/><stop offset="100%" stop-color="#3d2800"/></linearGradient></defs>
+      <rect width="900" height="320" fill="url(#sky5)"/>
+      <rect x="0" y="265" width="900" height="55" fill="#1a0f00"/>
+      <!-- Wooden stocks -->
+      <rect x="430" y="150" width="260" height="18" rx="7" fill="#6b3d1e" stroke="#4a2e0a" stroke-width="2.5"/>
+      <rect x="430" y="175" width="260" height="18" rx="7" fill="#8b5a2b" stroke="#4a2e0a" stroke-width="2.5"/>
+      <!-- Holes -->
+      <ellipse cx="500" cy="175" rx="18" ry="14" fill="#2d1806"/><ellipse cx="550" cy="175" rx="18" ry="14" fill="#2d1806"/><ellipse cx="595" cy="175" rx="13" ry="12" fill="#2d1806"/>
+      <!-- Lock on stocks -->
+      <rect x="668" y="148" width="24" height="20" rx="4" fill="#d4a017" stroke="#a07010" stroke-width="1.5"/>
+      <path d="M671,148 Q680,134 689,148" fill="none" stroke="#d4a017" stroke-width="3.5"/>
+      <!-- Biff & others in stocks -->
+      <text x="495" y="148" font-size="18">👧</text><text x="545" y="148" font-size="18">👧</text>
+      <!-- Guard — clickable -->
+      <g id="guard-hotspot-svg" style="cursor:pointer">
+        <circle cx="760" cy="170" r="50" fill="rgba(240,192,64,.12)" stroke="rgba(240,192,64,.5)" stroke-width="2" stroke-dasharray="7,4">
+          <animate attributeName="opacity" values=".4;1;.4" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="758" cy="130" r="22" fill="#4a3a1a"/>
+        <text x="750" y="140" font-size="20">😴</text>
+        <rect x="740" y="152" width="38" height="55" rx="6" fill="#3d2d0a"/>
+        <!-- Guard hat -->
+        <rect x="736" y="110" width="46" height="12" rx="4" fill="#2d1f00"/>
+        <rect x="744" y="90" width="30" height="24" rx="4" fill="#2d1f00"/>
+        <text x="758" y="88" text-anchor="middle" fill="#f0c040" font-size="10">👆 The guard</text>
+      </g>
+      <!-- Kipper with sweet -->
+      <text x="165" y="268" font-size="30">🧒</text>
+      <text x="200" y="252" font-size="22">🍬</text>
+      <text x="182" y="290" text-anchor="middle" fill="#a8e6a3" font-size="9" font-style="italic">Kipper's plan...</text>
+      <!-- Keys dangling -->
+      <text x="650" y="260" font-size="22">🗝️</text>
+      <!-- Path from Kipper to guard -->
+      <path d="M210,270 Q400,250 720,210" fill="none" stroke="rgba(240,192,64,.3)" stroke-width="2" stroke-dasharray="10,6"/>
+    </svg>
+  </div>
+  <div id="l5-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="q-card-title">🗝️ Put Kipper's trick in the correct order!</div>
+      <p class="question-text" style="font-size:.92rem;margin-bottom:8px">Drag the cards or use ▲▼ buttons, then click <strong>Check Order</strong>.</p>
+      <div class="seq-cards" id="seq-cards"></div>
+      <div style="text-align:center;margin-top:12px">
+        <button class="btn-primary" onclick="checkSequence()" style="font-size:.92rem;padding:10px 22px">✅ Check Order</button>
+      </div>
+      <div class="feedback-strip" id="l5-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 6 ══ -->
+<div class="screen" id="screen-l6">
+  <div class="explore-banner">
+    <span class="mission-badge">Mission 6 of 6</span>
+    <span class="explore-tip">🔒 Three locks hold your friends! <strong>Click each lock</strong> and answer to set them free.</span>
+  </div>
+  <div class="explore-scene" id="explore-l6">
+    <svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0d0d2e"/><stop offset="100%" stop-color="#1a1a4e"/></linearGradient></defs>
+      <rect width="900" height="320" fill="url(#sky6)"/>
+      <!-- Stars -->
+      <circle cx="60" cy="30" r="2" fill="white" opacity=".8"/><circle cx="200" cy="18" r="1.5" fill="white" opacity=".6"/>
+      <circle cx="380" cy="12" r="2" fill="white" opacity=".9"/><circle cx="550" cy="22" r="1.5" fill="white" opacity=".7"/>
+      <circle cx="720" cy="14" r="2" fill="white"/><circle cx="850" cy="35" r="1.5" fill="white" opacity=".8"/>
+      <!-- Prison cell bars -->
+      <rect x="200" y="60" width="500" height="200" rx="8" fill="rgba(0,0,0,.5)" stroke="#555" stroke-width="2"/>
+      <line x1="270" y1="60" x2="270" y2="260" stroke="#666" stroke-width="5"/><line x1="340" y1="60" x2="340" y2="260" stroke="#666" stroke-width="5"/>
+      <line x1="410" y1="60" x2="410" y2="260" stroke="#666" stroke-width="5"/><line x1="480" y1="60" x2="480" y2="260" stroke="#666" stroke-width="5"/>
+      <line x1="550" y1="60" x2="550" y2="260" stroke="#666" stroke-width="5"/><line x1="620" y1="60" x2="620" y2="260" stroke="#666" stroke-width="5"/>
+      <line x1="690" y1="60" x2="690" y2="260" stroke="#666" stroke-width="5"/>
+      <!-- Captured characters inside -->
+      <text x="310" y="175" text-anchor="middle" font-size="28">🏹</text>
+      <text x="450" y="175" text-anchor="middle" font-size="28">👧</text>
+      <text x="590" y="175" text-anchor="middle" font-size="28">👧</text>
+      <text x="310" y="200" text-anchor="middle" fill="#aaa" font-size="9">Robin Hood</text>
+      <text x="450" y="200" text-anchor="middle" fill="#aaa" font-size="9">Biff</text>
+      <text x="590" y="200" text-anchor="middle" fill="#aaa" font-size="9">Wilma</text>
+      <!-- Three chains with locks — each clickable -->
+      <!-- Lock 0 -->
+      <g id="lock-click-0" style="cursor:pointer">
+        <line x1="310" y1="58" x2="310" y2="25" stroke="#888" stroke-width="3" stroke-dasharray="6,3"/>
+        <rect x="291" y="20" width="38" height="30" rx="7" fill="#555" stroke="#888" stroke-width="1.5"/>
+        <path d="M297,20 Q310,8 323,20" fill="none" stroke="#888" stroke-width="3.5"/>
+        <circle cx="310" cy="33" r="5" fill="#333" id="lc0"/>
+        <text x="310" y="10" text-anchor="middle" fill="#f0c040" font-size="10" id="lt0">👆</text>
+      </g>
+      <!-- Lock 1 -->
+      <g id="lock-click-1" style="cursor:pointer">
+        <line x1="450" y1="58" x2="450" y2="25" stroke="#888" stroke-width="3" stroke-dasharray="6,3"/>
+        <rect x="431" y="20" width="38" height="30" rx="7" fill="#555" stroke="#888" stroke-width="1.5"/>
+        <path d="M437,20 Q450,8 463,20" fill="none" stroke="#888" stroke-width="3.5"/>
+        <circle cx="450" cy="33" r="5" fill="#333" id="lc1"/>
+        <text x="450" y="10" text-anchor="middle" fill="#f0c040" font-size="10" id="lt1">👆</text>
+      </g>
+      <!-- Lock 2 -->
+      <g id="lock-click-2" style="cursor:pointer">
+        <line x1="590" y1="58" x2="590" y2="25" stroke="#888" stroke-width="3" stroke-dasharray="6,3"/>
+        <rect x="571" y="20" width="38" height="30" rx="7" fill="#555" stroke="#888" stroke-width="1.5"/>
+        <path d="M577,20 Q590,8 603,20" fill="none" stroke="#888" stroke-width="3.5"/>
+        <circle cx="590" cy="33" r="5" fill="#333" id="lc2"/>
+        <text x="590" y="10" text-anchor="middle" fill="#f0c040" font-size="10" id="lt2">👆</text>
+      </g>
+      <!-- Kipper with keys -->
+      <text x="100" y="255" font-size="30">🧒</text>
+      <text x="132" y="240" font-size="18">🗝️</text>
+      <text x="100" y="278" text-anchor="middle" fill="#a8e6a3" font-size="9">Kipper is ready!</text>
+    </svg>
+  </div>
+  <div id="l6-q-area" style="width:100%;padding:10px 14px 0;display:none">
+    <div class="q-card">
+      <div class="locks-row" id="locks-row"></div>
+      <div class="q-card-title" id="l6-q-title">🔒 Vocabulary Lock 1 of 3</div>
+      <div id="l6-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FINAL ══ -->
+<div class="screen" id="screen-final">
+  <div class="forest-bg" id="final-forest"></div>
+  <svg class="badge-svg" width="130" height="130" viewBox="0 0 140 140" style="z-index:10;margin-top:28px">
+    <defs><radialGradient id="bg2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff9c4"/><stop offset="60%" stop-color="#d4a017"/><stop offset="100%" stop-color="#a07010"/></radialGradient></defs>
+    <polygon points="70,8 84,48 126,48 94,72 106,112 70,88 34,112 46,72 14,48 56,48" fill="url(#bg2)" stroke="#a07010" stroke-width="2"/>
+    <circle cx="70" cy="70" r="28" fill="rgba(255,255,255,.15)"/>
+    <text x="70" y="63" text-anchor="middle" font-size="20">🌲</text>
+    <text x="70" y="80" text-anchor="middle" fill="#4a2e0a" font-size="8" font-weight="bold">FOREST HERO</text>
+  </svg>
+  <h1 class="final-title" style="z-index:10">🎉 Mission Complete! 🎉</h1>
+  <p style="color:var(--parchment);font-size:1.05rem;z-index:10;text-align:center;padding:0 16px">You helped Kipper rescue Robin Hood and his friends!</p>
+  <p style="color:var(--gold-light);font-size:1.15rem;font-weight:bold;z-index:10">🏆 Three cheers for Kipper! 🏆</p>
+  <div class="final-score-box">Final Bravery Points: <strong style="color:var(--gold-light);font-size:1.35rem" id="final-score">0</strong></div>
+  <div class="reflection-box">
+    <label for="reflection">💬 Was Kipper brave, clever, or lucky? Give a reason from the story:</label>
+    <textarea id="reflection" placeholder="Write your answer here..."></textarea>
+    <div style="text-align:center;margin-top:10px">
+      <button class="btn-primary" onclick="submitReflection()" style="font-size:.92rem;padding:10px 22px">Submit Reflection</button>
+    </div>
+    <p id="reflection-feedback" style="color:var(--green-light);margin-top:10px;display:none;font-style:italic">⭐ Great thinking! A strong answer gives a reason from the story.</p>
+  </div>
+  <button class="btn-primary" onclick="resetGame()" style="z-index:10">▶ Play Again</button>
+</div>
+
+</div><!-- /game-wrapper -->
+
+<div id="char-bubble">Think carefully! 🤔</div>
+<footer>© EnJoyous Education</footer>
+
+<script>
+// ══════════════ AUDIO ══════════════
+let audioCtx=null, soundOn=true;
+function getCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function playTone(f,type,dur,vol=.13,delay=0){if(!soundOn)return;try{const c=getCtx(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.type=type;o.frequency.setValueAtTime(f,c.currentTime+delay);g.gain.setValueAtTime(vol,c.currentTime+delay);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+delay+dur);o.start(c.currentTime+delay);o.stop(c.currentTime+delay+dur+.05);}catch(e){}}
+function playChime(){[523,659,784,1047].forEach((f,i)=>playTone(f,'sine',.4,.12,i*.15));}
+function playSuccess(){[523,659,784].forEach((f,i)=>playTone(f,'sine',.3,.1,i*.1));}
+function playError(){playTone(200,'sawtooth',.3,.08);}
+function playWhoosh(){if(!soundOn)return;try{const c=getCtx(),buf=c.createBuffer(1,c.sampleRate*.4,c.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);const s=c.createBufferSource(),g=c.createGain();s.buffer=buf;g.gain.setValueAtTime(.18,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.4);s.connect(g);g.connect(c.destination);s.start();}catch(e){}}
+function playSheriff(){[110,98,87,73].forEach((f,i)=>playTone(f,'sawtooth',.5,.18,i*.12));}
+function playUnlock(){[440,880].forEach((f,i)=>playTone(f,'sine',.25,.12,i*.1));}
+function playCelebration(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>playTone(f,'sine',.35,.15,i*.12));}
+function toggleSound(){soundOn=!soundOn;document.getElementById('sound-btn').textContent=soundOn?'🔊 Sound':'🔇 Mute';}
+
+// ══════════════ STATE ══════════════
+let score=0, currentLevel=0, l1QIdx=0, l6QIdx=0, locksOpen=[false,false,false];
+
+// ══════════════ HUD ══════════════
+function updateHUD(){
+  document.getElementById('score-display').textContent=score;
+  if(currentLevel>0&&currentLevel<7){
+    document.getElementById('mission-display').textContent=`Mission ${currentLevel} of 6`;
+    document.getElementById('progress-bar').style.width=((currentLevel/6)*100)+'%';
+  }
+}
+function addScore(pts,el){
+  score+=pts; updateHUD();
+  if(el){
+    const pop=document.createElement('div'); pop.className='points-pop'; pop.textContent='+'+pts+' ⭐';
+    const r=el.getBoundingClientRect();
+    pop.style.cssText=`top:${r.top-10}px;left:${r.left+r.width/2-30}px`;
+    document.body.appendChild(pop); setTimeout(()=>pop.remove(),1300);
+  }
+}
+function showBubble(txt){
+  const b=document.getElementById('char-bubble'); b.textContent=txt; b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),3200);
+}
+
+// ══════════════ SCREENS ══════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el=document.getElementById('screen-'+id);
+  if(el)el.classList.add('active');
+}
+function goToLevel(n){
+  playWhoosh(); currentLevel=n; updateHUD();
+  const hud=document.getElementById('hud'),pw=document.getElementById('progress-wrap');
+  if(n===0){hud.classList.remove('visible');pw.classList.remove('visible');showScreen('start');}
+  else if(n<=6){hud.classList.add('visible');pw.classList.add('visible');showScreen('l'+n);initLevel(n);}
+  else{hud.classList.remove('visible');pw.classList.remove('visible');showScreen('final');initFinal();}
+}
+function skipLevel(){if(currentLevel<6)goToLevel(currentLevel+1);else goToLevel(7);}
+function resetGame(){
+  score=0;currentLevel=0;l1QIdx=0;l6QIdx=0;locksOpen=[false,false,false];
+  document.getElementById('progress-bar').style.width='0%';
+  document.getElementById('reflection-feedback').style.display='none';
+  document.getElementById('reflection').value='';
+  goToLevel(0);
+}
+function startGame(){playChime();goToLevel(1);}
+
+// ══════════════ INLINE FEEDBACK ══════════════
+function showFeedback(stripId, ok, icon, text, onContinue){
+  const strip=document.getElementById(stripId);
+  strip.className='feedback-strip show '+(ok?'ok':'err');
+  strip.querySelector('.feedback-strip-icon').textContent=icon;
+  strip.querySelector('.feedback-strip-text').textContent=text;
+  const btn=strip.querySelector('.cont-btn');
+  btn.textContent=ok?'Continue ➜':'Try Again';
+  btn.style.display=onContinue||!ok?'inline-block':'none';
+  btn.onclick=()=>{
+    strip.classList.remove('show');
+    if(onContinue)onContinue();
+    else{
+      // re-enable buttons in parent card
+      strip.closest('.q-card').querySelectorAll('.btn-option').forEach(b=>{b.disabled=false;b.classList.remove('wrong','correct');});
+    }
+  };
+  strip.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ══════════════ LEVEL INIT ══════════════
+function initLevel(n){
+  // Hide all q-areas for clean state
+  document.querySelectorAll('[id$="-q-area"]').forEach(el=>el.style.display='none');
+  if(n===1)initL1();
+  if(n===2)initL2();
+  if(n===3)initL3();
+  if(n===4)initL4();
+  if(n===5)initL5();
+  if(n===6)initL6();
+}
+
+// ── Helper: reveal question area ──
+function revealQArea(id){
+  const el=document.getElementById(id);
+  el.style.display='block';
+  el.style.animation='none';
+  setTimeout(()=>{el.style.animation='fadeIn .4s ease';},10);
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ══════════════ LEVEL 1 ══════════════
+const l1Qs=[
+  {q:"Where did Biff, Wilma, and Anneena go at the beginning of the story?",opts:["A cinema","A pantomime","A museum","A castle"],correct:1,hint:"Think about what kind of show they went to watch.",ok:"Great start! They went to a pantomime."},
+  {q:"What was the pantomime about?",opts:["Space","Pirates","Robin Hood","Dinosaurs"],correct:2,hint:"Remember the name of our story!",ok:"Excellent! The pantomime was all about Robin Hood."},
+  {q:"What began to glow?",opts:["A lamp","A sword","The magic key","The fire"],correct:2,hint:"Look at the title of this mission!",ok:"Well done! The magic key glowed — the adventure begins!"}
+];
+function initL1(){
+  l1QIdx=0;
+  const svg=document.getElementById('explore-l1');
+  const keyG=svg.querySelector('#key-hotspot-svg');
+  keyG.onclick=()=>{playChime();revealQArea('l1-q-area');keyG.style.pointerEvents='none';renderL1Q();showBubble("The key is glowing! ✨");};
+}
+function renderL1Q(){
+  const q=l1Qs[l1QIdx];
+  document.getElementById('l1-q-title').textContent=`🔑 Question ${l1QIdx+1} of 3`;
+  const c=document.getElementById('l1-content');
+  c.innerHTML=`<p class="question-text">${q.q}</p><div class="options-grid" id="l1-opts"></div><div class="feedback-strip" id="l1-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>`;
+  q.opts.forEach((o,i)=>{
+    const btn=document.createElement('button'); btn.className='btn-option';
+    btn.innerHTML=`<strong>${String.fromCharCode(65+i)}.</strong> ${o}`;
+    btn.onclick=()=>{
+      c.querySelectorAll('.btn-option').forEach(b=>b.disabled=true);
+      if(i===q.correct){
+        btn.classList.add('correct'); addScore(10,btn); playSuccess();
+        showFeedback('l1-fb',true,'✅',q.ok,()=>{
+          l1QIdx++;
+          if(l1QIdx<l1Qs.length){renderL1Q();}
+          else{addScore(20,btn);showBubble("Mission 1 complete! 🗝️");setTimeout(()=>goToLevel(2),600);}
+        });
+      } else {
+        btn.classList.add('wrong'); playError(); showBubble("Think carefully! 🤔");
+        showFeedback('l1-fb',false,'❌',q.hint,null);
+      }
+    };
+    document.getElementById('l1-opts').appendChild(btn);
+  });
+}
+
+// ══════════════ LEVEL 2 ══════════════
+function initL2(){
+  const data=[
+    {t:"A. Run away",ok:false,fb:"Running away won't help Robin Hood!"},
+    {t:"B. Walk carefully towards Robin Hood",ok:true,fb:"Good choice. Kipper needs to be careful but brave."},
+    {t:"C. Shout loudly at everyone",ok:false,fb:"Shouting could alert the Sheriff's men!"},
+    {t:"D. Hide forever",ok:false,fb:"Hiding won't rescue anyone. Kipper needs to act!"}
+  ];
+  const svg=document.getElementById('explore-l2');
+  const pathG=svg.querySelector('#path-hotspot-svg');
+  pathG.onclick=()=>{playChime();revealQArea('l2-q-area');pathG.style.pointerEvents='none';buildOptions('l2-options','l2-fb',data,()=>{addScore(30,null);showBubble("Good choice! 💪");setTimeout(()=>goToLevel(3),600);});showBubble("Which path should Kipper take? 🌲");};
+}
+
+// ══════════════ LEVEL 3 ══════════════
+function initL3(){
+  const data=[
+    {t:"A. Wilma's mum",ok:false,fb:"Look carefully. This is the villain of the story."},
+    {t:"B. The Sheriff",ok:true,fb:"Oh no! The Sheriff is here. Everyone is in danger!"},
+    {t:"C. A dragon",ok:false,fb:"This is a Robin Hood story, not a dragon story!"},
+    {t:"D. Floppy",ok:false,fb:"Floppy is a dog, not the villain! Look at the shadows."}
+  ];
+  const svg=document.getElementById('explore-l3');
+  const sG=svg.querySelector('#sheriff-hotspot-svg');
+  sG.onclick=()=>{playSheriff();revealQArea('l3-q-area');sG.style.pointerEvents='none';buildOptions('l3-options','l3-fb',data,()=>{addScore(30,null);showBubble("The Sheriff is near! ⚠️");setTimeout(()=>goToLevel(4),600);});showBubble("Who is that shadow? 👀");};
+}
+
+// ══════════════ LEVEL 4 ══════════════
+function initL4(){
+  const data=[
+    {t:"A. Stay hidden and do nothing",ok:false,fb:"Doing nothing won't help Robin Hood and the children!"},
+    {t:"B. Cry loudly",ok:false,fb:"Crying would give Kipper away to the Sheriff's men!"},
+    {t:"C. Think of a clever way to help",ok:true,fb:"Excellent! Kipper may be small, but he can still help."},
+    {t:"D. Join the Sheriff",ok:false,fb:"Join the Sheriff?! Kipper would never do that!"}
+  ];
+  const svg=document.getElementById('explore-l4');
+  const tG=svg.querySelector('#thought-hotspot-svg');
+  tG.onclick=()=>{playChime();revealQArea('l4-q-area');tG.style.pointerEvents='none';buildOptions('l4-options','l4-fb',data,()=>{addScore(30,null);showBubble("Clever thinking! 💡");setTimeout(()=>goToLevel(5),600);});showBubble("Help Kipper decide! 💭");};
+}
+
+// ══════════════ BUILD OPTIONS HELPER ══════════════
+function buildOptions(optsId, fbId, data, onSuccess){
+  const c=document.getElementById(optsId); c.innerHTML='';
+  data.forEach(d=>{
+    const btn=document.createElement('button'); btn.className='btn-option'; btn.textContent=d.t;
+    btn.onclick=()=>{
+      c.querySelectorAll('.btn-option').forEach(b=>b.disabled=true);
+      if(d.ok){
+        btn.classList.add('correct'); addScore(10,btn); playSuccess();
+        showFeedback(fbId,true,'✅',d.fb,onSuccess);
+      } else {
+        btn.classList.add('wrong'); playError();
+        showFeedback(fbId,false,'❌',d.fb,null);
+      }
+    };
+    c.appendChild(btn);
+  });
+}
+
+// ══════════════ LEVEL 5 ══════════════
+const correctOrder=["Kipper gives the man a sweet.","Kipper asks about the wooden lock.","The man puts in his head and hands.","Kipper locks the man in.","Kipper takes the keys."];
+let seqOrder=[];
+function initL5(){
+  seqOrder=[...correctOrder].sort(()=>Math.random()-.5);
+  const svg=document.getElementById('explore-l5');
+  const gG=svg.querySelector('#guard-hotspot-svg');
+  gG.onclick=()=>{playChime();revealQArea('l5-q-area');gG.style.pointerEvents='none';renderSeq();showBubble("Put the steps in order! 🗝️");};
+}
+function renderSeq(){
+  const c=document.getElementById('seq-cards'); c.innerHTML='';
+  seqOrder.forEach((text,i)=>{
+    const card=document.createElement('div'); card.className='seq-card'; card.draggable=true; card.dataset.index=i;
+    card.innerHTML=`<div class="seq-num">${i+1}</div><span style="flex:1">${text}</span><div style="display:flex;flex-direction:column;gap:2px"><button onclick="moveSeq(${i},-1)" style="background:var(--brown);color:var(--gold-light);border:none;border-radius:4px;width:25px;height:20px;cursor:pointer;font-size:.75rem">▲</button><button onclick="moveSeq(${i},1)" style="background:var(--brown);color:var(--gold-light);border:none;border-radius:4px;width:25px;height:20px;cursor:pointer;font-size:.75rem">▼</button></div>`;
+    card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',i);card.classList.add('dragging');});
+    card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+    card.addEventListener('dragover',e=>{e.preventDefault();card.classList.add('drag-over');});
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
+    card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('drag-over');const from=parseInt(e.dataTransfer.getData('text/plain'));if(from!==i){const tmp=seqOrder[from];seqOrder[from]=seqOrder[i];seqOrder[i]=tmp;renderSeq();}});
+    c.appendChild(card);
+  });
+}
+function moveSeq(i,dir){const j=i+dir;if(j<0||j>=seqOrder.length)return;const tmp=seqOrder[i];seqOrder[i]=seqOrder[j];seqOrder[j]=tmp;renderSeq();}
+function checkSequence(){
+  const ok=seqOrder.every((s,i)=>s===correctOrder[i]);
+  if(ok){addScore(30,document.getElementById('seq-cards'));playSuccess();showBubble("You found the keys! 🗝️");showFeedback('l5-fb',true,'🗝️','Well done! Kipper tricked the guard and got the keys!',()=>goToLevel(6));}
+  else{playError();showFeedback('l5-fb',false,'🔄','Almost! Think about what Kipper must do before he can take the keys.',null);}
+}
+
+// ══════════════ LEVEL 6 ══════════════
+const l6Qs=[
+  {q:'"Fell for it" means:',opts:["Fell down","Believed a trick","Ran away","Shouted loudly"],correct:1,hint:"Think about the guard. Did he believe Kipper's clever plan?",ok:"That's right! 'Fell for it' means believed a trick."},
+  {q:'"Set them free" means:',opts:["Helped them escape","Made them sing","Locked them up","Took them away"],correct:0,hint:"What did Kipper do with the keys? He helped them...",ok:"Correct! 'Set them free' means helped them escape."},
+  {q:'"Frightened" means:',opts:["Angry","Scared","Hungry","Sleepy"],correct:1,hint:"Think of how you feel before a scary part in a story.",ok:"Well done! 'Frightened' means scared."}
+];
+function initL6(){
+  l6QIdx=0; locksOpen=[false,false,false];
+  updateLocksDisplay();
+  // Wire lock click hotspots in SVG
+  [0,1,2].forEach(i=>{
+    const g=document.getElementById('lock-click-'+i);
+    g.onclick=()=>{
+      if(l6QIdx!==i){showBubble(`Answer lock ${l6QIdx+1} first! 🔒`);return;}
+      playChime(); revealQArea('l6-q-area'); g.style.pointerEvents='none';
+      renderL6Q();
+      showBubble("Unlock with the right word! 🔓");
+    };
+  });
+  // Auto-open q-area for lock 0 hint
+  showBubble("Click the first lock 🔒 to begin!");
+}
+function updateLocksDisplay(){
+  const row=document.getElementById('locks-row');
+  row.innerHTML='';
+  locksOpen.forEach((open,i)=>{
+    const d=document.createElement('div'); d.className='lock-item';
+    d.innerHTML=`<div class="lock-icon${open?' unlocked':''}">${open?'🔓':'🔒'}</div><small style="color:${open?'#2d8a2d':'#888'};font-size:.78rem">${open?'Opened!':'Lock '+(i+1)}</small>`;
+    row.appendChild(d);
+  });
+  // Update SVG lock indicators
+  [0,1,2].forEach(i=>{
+    const txt=document.getElementById('lt'+i);
+    if(txt) txt.textContent=locksOpen[i]?'✅':'👆';
+    const circ=document.getElementById('lc'+i);
+    if(circ) circ.setAttribute('fill',locksOpen[i]?'#2d8a2d':'#333');
+  });
+}
+function renderL6Q(){
+  const q=l6Qs[l6QIdx];
+  document.getElementById('l6-q-title').textContent=`🔒 Vocabulary Lock ${l6QIdx+1} of 3`;
+  const c=document.getElementById('l6-content');
+  c.innerHTML=`<p class="question-text">${q.q}</p><div class="options-grid" id="l6-opts"></div><div class="feedback-strip" id="l6-fb"><span class="feedback-strip-icon"></span><div><div class="feedback-strip-text"></div><button class="cont-btn"></button></div></div>`;
+  q.opts.forEach((o,i)=>{
+    const btn=document.createElement('button'); btn.className='btn-option';
+    btn.innerHTML=`<strong>${String.fromCharCode(65+i)}.</strong> ${o}`;
+    btn.onclick=()=>{
+      c.querySelectorAll('.btn-option').forEach(b=>b.disabled=true);
+      if(i===q.correct){
+        btn.classList.add('correct'); addScore(10,btn); playUnlock();
+        locksOpen[l6QIdx]=true; updateLocksDisplay(); l6QIdx++;
+        if(l6QIdx<3){
+          showFeedback('l6-fb',true,'🔓',q.ok+` Click lock ${l6QIdx+1} to continue!`,()=>{
+            document.getElementById('l6-q-area').style.display='none';
+          });
+        } else {
+          addScore(20,btn); playCelebration(); showBubble("All locks open! 🎉");
+          showFeedback('l6-fb',true,'🎉','All three locks are open! Everyone is free!',()=>goToLevel(7));
+        }
+      } else {
+        btn.classList.add('wrong'); playError();
+        showFeedback('l6-fb',false,'🔒',q.hint,null);
+      }
+    };
+    document.getElementById('l6-opts').appendChild(btn);
+  });
+}
+
+// ══════════════ FINAL ══════════════
+function initFinal(){
+  document.getElementById('final-score').textContent=score;
+  buildForest('final-forest'); playCelebration(); confetti();
+}
+function submitReflection(){
+  if(document.getElementById('reflection').value.trim().length>2){
+    document.getElementById('reflection-feedback').style.display='block'; playSuccess();
+  }
+}
+
+// ══════════════ VISUAL HELPERS ══════════════
+function buildForest(id){
+  const c=document.getElementById(id); if(!c)return;
+  [0,10,20,30,42,55,65,75,85,95].forEach(pct=>{
+    const h=80+Math.random()*90,w=30+Math.random()*32,t=document.createElement('div');
+    t.className='tree'; t.style.left=pct+'%';
+    const top=document.createElement('div'); top.className='tree-top'; top.style.cssText=`width:${w}px;height:${h*.7}px`;
+    const trunk=document.createElement('div'); trunk.className='tree-trunk'; trunk.style.cssText=`width:${w*.25}px;height:${h*.3}px`;
+    t.appendChild(top); t.appendChild(trunk); c.appendChild(t);
+  });
+  for(let i=0;i<28;i++){
+    const s=document.createElement('div'); s.className='star';
+    const sz=1+Math.random()*2.5;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*55}%;left:${Math.random()*100}%;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*2}s;`;
+    c.appendChild(s);
+  }
+}
+function buildStartScreen(){
+  const bg=document.getElementById('forest-bg'); if(!bg)return;
+  for(let i=0;i<26;i++){
+    const s=document.createElement('div'); s.className='star';
+    const sz=1+Math.random()*2.5;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*60}%;left:${Math.random()*100}%;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*2}s;`;
+    bg.appendChild(s);
+  }
+  [0,10,20,32,44,56,68,80,90].forEach(pct=>{
+    const h=80+Math.random()*90,w=30+Math.random()*30,t=document.createElement('div');
+    t.className='tree'; t.style.left=pct+'%';
+    const top=document.createElement('div'); top.className='tree-top'; top.style.cssText=`width:${w}px;height:${h*.7}px`;
+    const trunk=document.createElement('div'); trunk.className='tree-trunk'; trunk.style.cssText=`width:${w*.25}px;height:${h*.3}px`;
+    t.appendChild(top); t.appendChild(trunk); bg.appendChild(t);
+  });
+  // Particles
+  const pc=document.getElementById('particles-container'); if(!pc)return;
+  for(let i=0;i<12;i++){
+    const p=document.createElement('div'); p.className='particle';
+    const angle=(i/12)*360,dist=50+Math.random()*28;
+    p.style.cssText=`left:${44+Math.cos(angle*Math.PI/180)*18}px;top:${44+Math.sin(angle*Math.PI/180)*18}px;--dx:${Math.cos(angle*Math.PI/180)*dist}px;--dy:${(-38-Math.random()*35)}px;animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*2}s;background:${Math.random()>.5?'#f0c040':'#fff9c4'};`;
+    pc.appendChild(p);
+  }
+}
+function confetti(){
+  const cols=['#d4a017','#2d8a2d','#c0392b','#f0c040','#4a9a4a','#fff9c4'];
+  for(let i=0;i<55;i++){
+    const p=document.createElement('div'); p.className='confetti-piece';
+    p.style.cssText=`left:${Math.random()*100}vw;background:${cols[Math.floor(Math.random()*cols.length)]};animation-duration:${2+Math.random()*3}s;animation-delay:${Math.random()*1.8}s;transform:rotate(${Math.random()*360}deg);width:${6+Math.random()*8}px;height:${10+Math.random()*10}px;`;
+    document.body.appendChild(p); setTimeout(()=>p.remove(),6000);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', buildStartScreen);
+</script>
+</body>
+</html>
